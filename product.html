@@ -5,17 +5,20 @@
 <title>Product Details</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* Toast notification */
+  #toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: #16a34a; color: white; border-radius: 0.5rem; display: none; z-index: 50; }
+  #mainImg { cursor: zoom-in; }
+</style>
 </head>
 <body class="bg-gray-100 p-4">
 
-<div class="max-w-4xl mx-auto p-4 bg-white rounded-xl shadow mt-4">
-
+<div class="max-w-4xl mx-auto p-4 bg-white rounded-xl shadow mt-4" id="productContainer">
   <div id="carousel" class="relative w-full h-72 overflow-hidden rounded">
-    <img id="mainImg" src="" class="w-full h-full object-cover cursor-zoom-in transition-all duration-300">
+    <img id="mainImg" src="" class="w-full h-full object-cover transition-all duration-300">
     <button id="prevBtn" class="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">‹</button>
     <button id="nextBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">›</button>
   </div>
-
   <div id="thumbs" class="flex gap-2 overflow-x-auto mt-2"></div>
 
   <div class="mt-4">
@@ -34,17 +37,23 @@
       <button onclick="payUPI()" class="bg-green-600 px-6 py-3 rounded text-white font-bold flex-1">Pay via UPI</button>
     </div>
   </div>
-
 </div>
+
+<div id="toast"></div>
 
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1-7MmarfUBcDmvZw38wd9cE9ZJjr4qedZHBnK_8a2yhg/export?format=csv";
 const id = new URLSearchParams(window.location.search).get("id");
-let images = [], currentIndex=0, prodData;
+let images=[], currentIndex=0, prodData=null;
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.innerText = msg; t.style.display='block';
+  setTimeout(()=>t.style.display='none',2000);
+}
 
 function parseCSVRow(row){
-  const result = [];
-  let current="", insideQuotes=false;
+  const result=[]; let current="", insideQuotes=false;
   for(let i=0;i<row.length;i++){
     const char=row[i];
     if(char=='"' && row[i+1]=='"'){current+='"';i++;}
@@ -60,23 +69,37 @@ fetch(CSV_URL)
 .then(r=>r.text())
 .then(data=>{
   const rows=data.split("\n").slice(1);
-  const p = rows.map(r=>parseCSVRow(r)).find(r=>r[0]===id);
-  if(!p) return;
+  const pRow = rows.map(r=>parseCSVRow(r)).find(r=>r[0]===id);
+  if(!pRow){
+    document.getElementById('productContainer').innerHTML="<p class='text-center text-red-500 text-lg'>Product not found!</p>";
+    return;
+  }
 
-  prodData = {id:p[0], name:p[1], price:parseFloat(p[3])};
+  prodData = {
+    id:pRow[0],
+    name:pRow[1],
+    category:pRow[2],
+    price:parseFloat(pRow[3]),
+    stock:pRow[4],
+    thumbnail:pRow[5],
+    description:pRow[6],
+    images:pRow[7]
+  };
 
-  document.getElementById('prodName').innerText = p[1];
-  document.getElementById('prodDesc').innerText = p[6];
-  document.getElementById('prodPrice').innerText = "₹"+p[3];
-  document.getElementById('prodStock').innerText = p[4];
-  document.getElementById('prodStock').className = p[4]=='In Stock' ? "mt-2 font-semibold text-green-600" : "mt-2 font-semibold text-red-600";
+  document.getElementById('prodName').innerText = prodData.name;
+  document.getElementById('prodDesc').innerText = prodData.description;
+  document.getElementById('prodPrice').innerText = "₹"+prodData.price;
+  document.getElementById('prodStock').innerText = prodData.stock;
+  document.getElementById('prodStock').className = prodData.stock=='In Stock' ? "mt-2 font-semibold text-green-600" : "mt-2 font-semibold text-red-600";
 
-  images = p[7].replace(/"/g,"").split("|").map(i=>i.trim());
-  const mainImg = document.getElementById('mainImg');
-  mainImg.src = images[0];
+  images = prodData.images.replace(/"/g,"").split("|").map(i=>i.trim());
+  if(images.length===0) images = [prodData.thumbnail];
+  document.getElementById('mainImg').src = images[0];
 
   const thumbs = document.getElementById('thumbs');
-  thumbs.innerHTML = images.map((img,i)=>`<img src="${img}" class="h-16 w-16 object-cover border rounded cursor-pointer ${i===0?'border-blue-500':'border-gray-200'}" onclick="changeImg(${i})">`).join("");
+  thumbs.innerHTML = images.map((img,i)=>`
+    <img src="${img}" class="h-16 w-16 object-cover border rounded cursor-pointer ${i===0?'border-blue-500':'border-gray-200'}" onclick="changeImg(${i})">
+  `).join("");
 
   document.getElementById('prevBtn').addEventListener('click',()=>prevImg());
   document.getElementById('nextBtn').addEventListener('click',()=>nextImg());
@@ -102,18 +125,20 @@ function prevImg(){currentIndex=(currentIndex-1+images.length)%images.length; ch
 function nextImg(){currentIndex=(currentIndex+1)%images.length; changeImg(currentIndex);}
 
 function addToCart(){
+  if(!prodData) return showToast("Product not loaded yet!");
   let cart = JSON.parse(localStorage.getItem('cart'))||[];
   const qty=parseInt(document.getElementById('quantity').value)||1;
   for(let i=0;i<qty;i++) cart.push(prodData.id);
   localStorage.setItem('cart', JSON.stringify(cart));
-  alert("Added to cart");
+  showToast(`${prodData.name} added to cart!`);
 }
 
 function payUPI(){
+  if(!prodData) return showToast("Product not loaded yet!");
   const qty=parseInt(document.getElementById('quantity').value)||1;
-  const amount = (prodData.price * qty).toFixed(2);
+  const amount=(prodData.price*qty).toFixed(2);
   const msg = encodeURIComponent(`Payment for ${prodData.name} x${qty} = ₹${amount}`);
-  const upiLink = `upi://pay?pa=7093218658@ybl&pn=Rajesh Kumar&am=${amount}&cu=INR&tn=${msg}`;
+  const upiLink=`upi://pay?pa=7093218658@ybl&pn=Rajesh Kumar&am=${amount}&cu=INR&tn=${msg}`;
   window.location.href = upiLink;
 }
 </script>
