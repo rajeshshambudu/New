@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  #toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: #16a34a; color: white; border-radius: 0.5rem; display: none; z-index: 50; }
+#toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: #16a34a; color: white; border-radius: 0.5rem; display: none; z-index: 50; }
 </style>
 </head>
 <body class="bg-gray-100 p-4">
@@ -14,9 +14,7 @@
 <div class="max-w-4xl mx-auto p-4 bg-white rounded-xl shadow mt-4">
   <h1 class="text-2xl font-bold mb-4">Your Cart</h1>
   <div id="cartItems" class="space-y-4"></div>
-
   <div id="cartEmpty" class="text-center text-gray-500 mt-10 hidden">Your cart is empty.</div>
-
   <div class="mt-6 flex justify-between items-center">
     <div class="text-xl font-bold">Total: ₹<span id="cartTotal">0</span></div>
     <button onclick="payUPI()" class="bg-green-600 px-6 py-3 rounded text-white font-bold">Pay via UPI</button>
@@ -27,6 +25,7 @@
 
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1-7MmarfUBcDmvZw38wd9cE9ZJjr4qedZHBnK_8a2yhg/export?format=csv";
+let productsMap = {};
 
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -34,7 +33,6 @@ function showToast(msg){
   setTimeout(()=>t.style.display='none',2000);
 }
 
-// Parse CSV row safely
 function parseCSVRow(row){
   const result=[]; let current="", insideQuotes=false;
   for(let i=0;i<row.length;i++){
@@ -48,8 +46,6 @@ function parseCSVRow(row){
   return result;
 }
 
-// Load products from Google Sheet
-let productsMap = {};
 fetch(CSV_URL)
 .then(r=>r.text())
 .then(data=>{
@@ -64,7 +60,6 @@ fetch(CSV_URL)
   renderCart();
 });
 
-// Render cart items
 function renderCart(){
   let cart = JSON.parse(localStorage.getItem('cart'))||[];
   if(cart.length===0){ 
@@ -76,14 +71,13 @@ function renderCart(){
 
   document.getElementById('cartEmpty').classList.add('hidden');
 
-  // Calculate quantity per product
   const qtyMap = {};
   cart.forEach(id => qtyMap[id]=(qtyMap[id]||0)+1);
 
   let total=0;
   const html = Object.keys(qtyMap).map(id=>{
     const p = productsMap[id];
-    if(!p) return ""; // skip if product not found
+    if(!p) return "";
     const qty = qtyMap[id];
     const sub = (p.price*qty).toFixed(2);
     total += parseFloat(sub);
@@ -105,35 +99,35 @@ function renderCart(){
   document.getElementById('cartTotal').innerText = total.toFixed(2);
 }
 
-// Remove one product type from cart
 function removeItem(id){
   let cart = JSON.parse(localStorage.getItem('cart'))||[];
-  cart = cart.filter(item => item!==id); // remove all instances of this product
+  cart = cart.filter(item => item!==id);
   localStorage.setItem('cart', JSON.stringify(cart));
   showToast("Product removed from cart");
   renderCart();
 }
 
-// UPI Checkout
 function payUPI(){
   let cart = JSON.parse(localStorage.getItem('cart'))||[];
   if(cart.length===0) return showToast("Cart is empty");
 
-  // Calculate total and build message
   const qtyMap = {};
-  let msgText="Payment for products:\n";
-  let total=0;
-  cart.forEach(id => qtyMap[id]=(qtyMap[id]||0)+1);
+  cart.forEach(id => qtyMap[id] = (qtyMap[id]||0)+1);
+
+  let total = 0;
+  let msgText = "Payment for products:\n";
+
   Object.keys(qtyMap).forEach(id=>{
     const p = productsMap[id];
     if(!p) return;
-    const qty=qtyMap[id];
-    const sub=(p.price*qty).toFixed(2);
-    total += parseFloat(sub);
-    msgText += `${p.name} x${qty} = ₹${sub}\n`;
+    const qty = qtyMap[id];
+    const subtotal = (p.price*qty).toFixed(2);
+    total += parseFloat(subtotal);
+    msgText += `${p.name} x${qty} = ₹${subtotal}\n`;
   });
 
-  const msg = encodeURIComponent(msgText + "Total: ₹" + total.toFixed(2));
+  msgText += `Total: ₹${total.toFixed(2)}`;
+  const msg = encodeURIComponent(msgText);
   const upiLink = `upi://pay?pa=7093218658@ybl&pn=Rajesh Kumar&am=${total.toFixed(2)}&cu=INR&tn=${msg}`;
   window.location.href = upiLink;
 }
