@@ -6,9 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  /* Toast notification */
-  #toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: #16a34a; color: white; border-radius: 0.5rem; display: none; z-index: 50; }
-  #mainImg { cursor: zoom-in; }
+#toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: #16a34a; color: white; border-radius: 0.5rem; display: none; z-index: 50; }
+#mainImg { cursor: zoom-in; }
 </style>
 </head>
 <body class="bg-gray-100 p-4">
@@ -134,11 +133,28 @@ function addToCart(){
 }
 
 function payUPI(){
-  if(!prodData) return showToast("Product not loaded yet!");
-  const qty=parseInt(document.getElementById('quantity').value)||1;
-  const amount=(prodData.price*qty).toFixed(2);
-  const msg = encodeURIComponent(`Payment for ${prodData.name} x${qty} = ₹${amount}`);
-  const upiLink=`upi://pay?pa=7093218658@ybl&pn=Rajesh Kumar&am=${amount}&cu=INR&tn=${msg}`;
+  let cart = JSON.parse(localStorage.getItem('cart')) || [];
+  if(cart.length === 0) return showToast("Cart is empty");
+
+  const qtyMap = {};
+  cart.forEach(id => qtyMap[id] = (qtyMap[id] || 0) + 1);
+
+  let total = 0;
+  let msgText = "Payment for products:\n";
+
+  Object.keys(qtyMap).forEach(id => {
+    const p = prodData.id===id ? prodData : null;
+    if(!p && window.productsMap) p=window.productsMap[id];
+    if(!p) return;
+    const qty = qtyMap[id];
+    const subtotal = (p.price * qty).toFixed(2);
+    total += parseFloat(subtotal);
+    msgText += `${p.name} x${qty} = ₹${subtotal}\n`;
+  });
+
+  msgText += `Total: ₹${total.toFixed(2)}`;
+  const msg = encodeURIComponent(msgText);
+  const upiLink = `upi://pay?pa=7093218658@ybl&pn=Rajesh Kumar&am=${total.toFixed(2)}&cu=INR&tn=${msg}`;
   window.location.href = upiLink;
 }
 </script>
