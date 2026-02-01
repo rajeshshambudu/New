@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Product Details</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 p-4">
+
+<div id="product" class="max-w-4xl mx-auto bg-white p-4 rounded-xl shadow"></div>
+
+<script>
+const CSV_URL =
+"https://docs.google.com/spreadsheets/d/1-7MmarfUBcDmvZw38wd9cE9ZJjr4qedZHBnK_8a2yhg/export?format=csv";
+
+const id = new URLSearchParams(window.location.search).get("id");
+
+fetch(CSV_URL)
+.then(r => r.text())
+.then(data => {
+  const rows = data.split("\n").slice(1);
+  const p = rows.map(r => r.split(",")).find(r => r[0] === id);
+  if(!p) return;
+
+  const images = p[7].split("|");
+
+  document.getElementById("product").innerHTML = `
+  <div class="grid md:grid-cols-2 gap-6">
+
+    <!-- IMAGE SLIDER -->
+    <div>
+      <img id="mainImg" src="${images[0]}"
+        class="w-full h-72 object-cover rounded mb-2">
+
+      <div class="flex gap-2 overflow-x-auto">
+        ${images.map(i => `
+          <img src="${i}"
+          onclick="changeImg('${i}')"
+          class="h-16 w-16 object-cover border rounded cursor-pointer">
+        `).join("")}
+      </div>
+    </div>
+
+    <!-- INFO -->
+    <div>
+      <h1 class="text-2xl font-bold">${p[1]}</h1>
+      <p class="text-gray-600 mt-1">${p[6]}</p>
+
+      <div class="text-3xl font-bold text-green-700 mt-3">
+        ₹${p[3]}
+      </div>
+
+      <div class="mt-1 font-semibold ${p[4]=='In Stock'?'text-green-600':'text-red-600'}">
+        ${p[4]}
+      </div>
+
+      <div class="mt-6 flex gap-3">
+        <button onclick="addToCart('${p[0]}')"
+          class="bg-yellow-500 px-6 py-3 rounded text-white font-bold">
+          Add to Cart
+        </button>
+
+        <button onclick="buyNow()"
+          class="bg-orange-600 px-6 py-3 rounded text-white font-bold">
+          Buy Now
+        </button>
+      </div>
+    </div>
+
+  </div>
+  `;
+});
+
+function changeImg(src){
+  document.getElementById("mainImg").src = src;
+}
+
+function addToCart(id){
+  let cart = JSON.parse(localStorage.getItem("cart")) || [];
+  cart.push(id);
+  localStorage.setItem("cart", JSON.stringify(cart));
+  alert("Added to cart");
+}
+
+function buyNow(){
+  alert("Checkout simulation only");
+}
+</script>
+
+</body>
+</html>
