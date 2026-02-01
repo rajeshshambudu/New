@@ -2,25 +2,41 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<title>Cart - Mini Amazon Store</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cart - Mini Amazon</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<style>
+  #toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: #16a34a; color: white; border-radius: 0.5rem; display: none; z-index: 50; }
+</style>
 </head>
 <body class="bg-gray-100 p-4">
 
-<header class="text-2xl font-bold text-center mb-4 bg-blue-900 text-white py-2 rounded">
-Your Cart
-</header>
+<div class="max-w-4xl mx-auto p-4 bg-white rounded-xl shadow mt-4">
+  <h1 class="text-2xl font-bold mb-4">Your Cart</h1>
+  <div id="cartItems" class="space-y-4"></div>
 
-<div id="cartContainer" class="max-w-4xl mx-auto bg-white rounded-xl shadow p-4"></div>
+  <div id="cartEmpty" class="text-center text-gray-500 mt-10 hidden">Your cart is empty.</div>
+
+  <div class="mt-6 flex justify-between items-center">
+    <div class="text-xl font-bold">Total: ₹<span id="cartTotal">0</span></div>
+    <button onclick="payUPI()" class="bg-green-600 px-6 py-3 rounded text-white font-bold">Pay via UPI</button>
+  </div>
+</div>
+
+<div id="toast"></div>
 
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1-7MmarfUBcDmvZw38wd9cE9ZJjr4qedZHBnK_8a2yhg/export?format=csv";
-let cart = JSON.parse(localStorage.getItem("cart")) || [];
 
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.innerText = msg; t.style.display='block';
+  setTimeout(()=>t.style.display='none',2000);
+}
+
+// Parse CSV row safely
 function parseCSVRow(row){
-  const result = [];
-  let current="", insideQuotes=false;
+  const result=[]; let current="", insideQuotes=false;
   for(let i=0;i<row.length;i++){
     const char=row[i];
     if(char=='"' && row[i+1]=='"'){current+='"';i++;}
@@ -32,117 +48,95 @@ function parseCSVRow(row){
   return result;
 }
 
+// Load products from Google Sheet
+let productsMap = {};
 fetch(CSV_URL)
 .then(r=>r.text())
 .then(data=>{
-  const rows = data.split("\n").slice(1);
-  const products = rows.map(r=>{
+  const rows=data.split("\n").slice(1);
+  rows.forEach(r=>{
     const c=parseCSVRow(r);
-    return {id:c[0], name:c[1], price:parseFloat(c[3]), stock:c[4], thumbnail:c[5]};
-  }).filter(p=>p.id);
-
-  // Merge cart quantities
-  const cartMap = {};
-  cart.forEach(id => { cartMap[id] = (cartMap[id]||0)+1; });
-  const cartItems = products.filter(p=>cartMap[p.id]);
-
-  if(cartItems.length===0){
-    document.getElementById('cartContainer').innerHTML="<p class='text-center text-gray-500'>Cart is empty</p>";
-    return;
-  }
-
-  let total = 0;
-  let html = '';
-
-  cartItems.forEach(p=>{
-    const qty = cartMap[p.id];
-    const subtotal = p.price*qty;
-    total += subtotal;
-
-    html += `
-    <div class="flex flex-col md:flex-row items-center justify-between gap-4 border-b py-4">
-      <div class="flex items-center gap-3 flex-1">
-        <img src="${p.thumbnail}" class="w-20 h-20 object-cover rounded">
-        <div>
-          <p class="font-bold">${p.name}</p>
-          <p class="text-gray-500">₹${p.price}</p>
-          <p class="${p.stock==='In Stock'?'text-green-600':'text-red-600'} text-sm">${p.stock}</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <label>Qty:</label>
-        <input type="number" min="1" value="${qty}" class="w-16 p-1 border rounded" onchange="updateQty('${p.id}', this.value)">
-      </div>
-      <div class="text-right flex flex-col gap-1">
-        <p>Subtotal: ₹<span id="sub-${p.id}">${subtotal}</span></p>
-        <button onclick="removeItem('${p.id}')" class="text-red-500 text-sm underline">Remove</button>
-      </div>
-    </div>`;
+    if(c[0]) productsMap[c[0]] = {
+      id:c[0], name:c[1], category:c[2], price:parseFloat(c[3]),
+      stock:c[4], thumbnail:c[5], description:c[6], images:c[7]
+    };
   });
-
-  html += `
-  <div class="text-right font-bold text-xl mt-4">Total: ₹<span id="total">${total}</span></div>
-  <div class="text-right mt-4">
-    <button onclick="payUPI()" class="bg-green-600 text-white px-6 py-3 rounded">Pay via UPI</button>
-  </div>`;
-
-  document.getElementById('cartContainer').innerHTML = html;
+  renderCart();
 });
 
-// Update quantity
-function updateQty(id, value){
-  value = parseInt(value);
-  if(isNaN(value) || value<1) value=1;
-  let cartArr = [];
-  cart.forEach(i=>{ if(i!==id) cartArr.push(i); });
-  for(let i=0;i<value;i++) cartArr.push(id);
-  localStorage.setItem('cart', JSON.stringify(cartArr));
-  location.reload();
+// Render cart items
+function renderCart(){
+  let cart = JSON.parse(localStorage.getItem('cart'))||[];
+  if(cart.length===0){ 
+    document.getElementById('cartItems').innerHTML=""; 
+    document.getElementById('cartEmpty').classList.remove('hidden'); 
+    document.getElementById('cartTotal').innerText='0'; 
+    return; 
+  }
+
+  document.getElementById('cartEmpty').classList.add('hidden');
+
+  // Calculate quantity per product
+  const qtyMap = {};
+  cart.forEach(id => qtyMap[id]=(qtyMap[id]||0)+1);
+
+  let total=0;
+  const html = Object.keys(qtyMap).map(id=>{
+    const p = productsMap[id];
+    if(!p) return ""; // skip if product not found
+    const qty = qtyMap[id];
+    const sub = (p.price*qty).toFixed(2);
+    total += parseFloat(sub);
+    return `
+      <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
+        <div class="flex items-center gap-4">
+          <img src="${p.thumbnail}" class="w-16 h-16 object-cover rounded">
+          <div>
+            <div class="font-bold">${p.name}</div>
+            <div class="text-sm text-gray-500">₹${p.price} x ${qty} = ₹${sub}</div>
+          </div>
+        </div>
+        <button onclick="removeItem('${id}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded">Remove</button>
+      </div>
+    `;
+  }).join("");
+
+  document.getElementById('cartItems').innerHTML = html;
+  document.getElementById('cartTotal').innerText = total.toFixed(2);
 }
 
-// Remove item
+// Remove one product type from cart
 function removeItem(id){
-  let cartArr = cart.filter(i=>i!==id);
-  localStorage.setItem('cart', JSON.stringify(cartArr));
-  location.reload();
+  let cart = JSON.parse(localStorage.getItem('cart'))||[];
+  cart = cart.filter(item => item!==id); // remove all instances of this product
+  localStorage.setItem('cart', JSON.stringify(cart));
+  showToast("Product removed from cart");
+  renderCart();
 }
 
-// UPI payment
+// UPI Checkout
 function payUPI(){
-  if(cart.length===0){ alert("Cart is empty!"); return; }
+  let cart = JSON.parse(localStorage.getItem('cart'))||[];
+  if(cart.length===0) return showToast("Cart is empty");
 
-  // Merge quantities and fetch product details
-  const cartMap = {};
-  cart.forEach(id => { cartMap[id] = (cartMap[id]||0)+1; });
-
-  fetch(CSV_URL)
-  .then(r=>r.text())
-  .then(data=>{
-    const rows = data.split("\n").slice(1);
-    const products = rows.map(r=>{
-      const c=parseCSVRow(r);
-      return {id:c[0], name:c[1], price:parseFloat(c[3])};
-    }).filter(p=>p.id);
-
-    let total = 0;
-    let message = "Payment for: ";
-    products.forEach(p=>{
-      const qty = cartMap[p.id];
-      if(qty){
-        const subtotal = (p.price*qty).toFixed(2);
-        total += parseFloat(subtotal);
-        message += `${p.name} x${qty} = ₹${subtotal}; `;
-      }
-    });
-
-    const amount = total.toFixed(2);
-    const msgEncoded = encodeURIComponent(message);
-    const upiLink = `upi://pay?pa=7093218658@ybl&pn=Rajesh Kumar&am=${amount}&cu=INR&tn=${msgEncoded}`;
-    window.location.href = upiLink;
+  // Calculate total and build message
+  const qtyMap = {};
+  let msgText="Payment for products:\n";
+  let total=0;
+  cart.forEach(id => qtyMap[id]=(qtyMap[id]||0)+1);
+  Object.keys(qtyMap).forEach(id=>{
+    const p = productsMap[id];
+    if(!p) return;
+    const qty=qtyMap[id];
+    const sub=(p.price*qty).toFixed(2);
+    total += parseFloat(sub);
+    msgText += `${p.name} x${qty} = ₹${sub}\n`;
   });
+
+  const msg = encodeURIComponent(msgText + "Total: ₹" + total.toFixed(2));
+  const upiLink = `upi://pay?pa=7093218658@ybl&pn=Rajesh Kumar&am=${total.toFixed(2)}&cu=INR&tn=${msg}`;
+  window.location.href = upiLink;
 }
-
 </script>
-
 </body>
 </html>
