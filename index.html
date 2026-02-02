@@ -5,40 +5,42 @@
 <title>Mini Amazon Store</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
+<style>
+#toast {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  padding: 1rem 1.5rem;
+  background: #16a34a;
+  color: white;
+  border-radius: 0.5rem;
+  display: none;
+  z-index: 50;
+}
+</style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-100 p-4">
 
-<header class="bg-blue-900 text-white p-4 text-center font-bold text-xl">
-Mini Amazon Store
-</header>
-
-<div class="max-w-7xl mx-auto p-4">
-
-  <!-- Filters -->
-  <div class="flex flex-col md:flex-row gap-4 mb-4 items-center">
-    <select id="categoryFilter" class="p-2 rounded border">
-      <option value="">All Categories</option>
-    </select>
-
-    <select id="priceSort" class="p-2 rounded border">
-      <option value="">Sort by Price</option>
-      <option value="asc">Low → High</option>
-      <option value="desc">High → Low</option>
-    </select>
-  </div>
-
-  <!-- Product Grid -->
-  <div id="products" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
-
+<div class="max-w-7xl mx-auto">
+  <h1 class="text-3xl font-bold mb-6">Products</h1>
+  <div id="productGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
 </div>
+
+<div id="toast"></div>
 
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1-7MmarfUBcDmvZw38wd9cE9ZJjr4qedZHBnK_8a2yhg/export?format=csv";
-let products = [];
+let productsMap = {};
 
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.innerText = msg; t.style.display='block';
+  setTimeout(()=>t.style.display='none',2000);
+}
+
+// CSV parser
 function parseCSVRow(row){
-  const result = [];
-  let current="", insideQuotes=false;
+  const result=[]; let current="", insideQuotes=false;
   for(let i=0;i<row.length;i++){
     const char=row[i];
     if(char=='"' && row[i+1]=='"'){current+='"';i++;}
@@ -50,63 +52,52 @@ function parseCSVRow(row){
   return result;
 }
 
+// Load products
 fetch(CSV_URL)
 .then(r=>r.text())
 .then(data=>{
   const rows=data.split("\n").slice(1);
-  products = rows.map(r=>{
+  const grid = document.getElementById('productGrid');
+  grid.innerHTML = "";
+  rows.forEach(r=>{
     const c=parseCSVRow(r);
-    return {id:c[0], name:c[1], category:c[2], price:parseFloat(c[3]), stock:c[4], thumbnail:c[5], description:c[6], images:c[7]};
-  }).filter(p=>p.id);
+    if(!c[0]) return;
+    const p = {
+      id:c[0],
+      name:c[1],
+      category:c[2],
+      price:parseFloat(c[3]),
+      stock:c[4],
+      thumbnail:c[5],
+      description:c[6],
+      images:c[7]
+    };
+    productsMap[p.id] = p;
 
-  populateCategoryFilter();
-  renderProducts(products);
+    grid.innerHTML += `
+      <div class="bg-white p-4 rounded shadow flex flex-col">
+        <img src="${p.thumbnail}" class="w-full h-40 object-cover rounded mb-2">
+        <h2 class="font-bold text-lg">${p.name}</h2>
+        <p class="text-green-700 font-bold mt-1">₹${p.price}</p>
+        <p class="text-sm text-gray-500 mt-1">${p.stock}</p>
+        <div class="mt-auto flex gap-2">
+          <a href="product.html?id=${p.id}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex-1 text-center">View</a>
+          <button onclick="addToCart('${p.id}')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded flex-1">Add</button>
+        </div>
+      </div>
+    `;
+  });
 });
 
-function populateCategoryFilter(){
-  const unique = [...new Set(products.map(p=>p.category))];
-  const select = document.getElementById("categoryFilter");
-  unique.forEach(cat=>{
-    const opt=document.createElement("option");
-    opt.value=cat; opt.textContent=cat;
-    select.appendChild(opt);
-  });
-}
-
-function renderProducts(data){
-  const grid = document.getElementById("products");
-  if(data.length===0){ grid.innerHTML="<p class='text-center text-gray-500 col-span-4'>No products found</p>"; return; }
-  grid.innerHTML = data.map(p=>`
-    <div class="bg-white rounded-xl shadow p-3 hover:shadow-lg transition">
-      <a target="_blank" href="product.html?id=${p.id}">
-        <img src="${p.thumbnail}" class="h-40 w-full object-cover rounded">
-      </a>
-      <h3 class="font-bold mt-2 text-sm">${p.name}</h3>
-      <p class="text-xs text-gray-500">${p.category}</p>
-      <div class="text-green-700 font-bold mt-1">₹${p.price}</div>
-      <div class="text-xs mt-1 ${p.stock=='In Stock'?'text-green-600':'text-red-600'}">
-        ${p.stock}
-      </div>
-    </div>
-  `).join("");
-}
-
-document.getElementById("categoryFilter").addEventListener("change", applyFilters);
-document.getElementById("priceSort").addEventListener("change", applyFilters);
-
-function applyFilters(){
-  const cat = document.getElementById("categoryFilter").value;
-  const sort = document.getElementById("priceSort").value;
-
-  let filtered = [...products];
-  if(cat) filtered = filtered.filter(p=>p.category===cat);
-
-  if(sort==='asc') filtered.sort((a,b)=>a.price-b.price);
-  if(sort==='desc') filtered.sort((a,b)=>b.price-a.price);
-
-  renderProducts(filtered);
+// Add to cart directly from index page
+function addToCart(id){
+  const p = productsMap[id];
+  if(!p) return showToast("Product not loaded yet!");
+  let cart = JSON.parse(localStorage.getItem('cart'))||{};
+  cart[id] = (cart[id] || 0) + 1;
+  localStorage.setItem('cart', JSON.stringify(cart));
+  showToast(`${p.name} added to cart!`);
 }
 </script>
-
 </body>
 </html>
