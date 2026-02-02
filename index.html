@@ -6,24 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-#toast {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  padding: 1rem 1.5rem;
-  background: #16a34a;
-  color: white;
-  border-radius: 0.5rem;
-  display: none;
-  z-index: 50;
-}
+#toast {position:fixed;bottom:1rem;right:1rem;padding:1rem 1.5rem;background:#16a34a;color:white;border-radius:.5rem;display:none;z-index:50;}
 </style>
 </head>
 <body class="bg-gray-100 p-4">
 
 <div class="max-w-7xl mx-auto">
-  <h1 class="text-3xl font-bold mb-6">Products</h1>
-  <div id="productGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
+<h1 class="text-3xl font-bold mb-6">Products</h1>
+<div id="productGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
 </div>
 
 <div id="toast"></div>
@@ -34,13 +24,15 @@ let productsMap = {};
 
 function showToast(msg){
   const t = document.getElementById('toast');
-  t.innerText = msg; t.style.display='block';
+  t.innerText = msg;
+  t.style.display='block';
   setTimeout(()=>t.style.display='none',2000);
 }
 
-// CSV parser
+// Parse CSV row
 function parseCSVRow(row){
-  const result=[]; let current="", insideQuotes=false;
+  const result=[];
+  let current="", insideQuotes=false;
   for(let i=0;i<row.length;i++){
     const char=row[i];
     if(char=='"' && row[i+1]=='"'){current+='"';i++;}
@@ -52,34 +44,25 @@ function parseCSVRow(row){
   return result;
 }
 
-// Load products
-fetch(CSV_URL)
-.then(r=>r.text())
-.then(data=>{
+// Load products from CSV
+fetch(CSV_URL).then(r=>r.text()).then(data=>{
   const rows=data.split("\n").slice(1);
-  const grid = document.getElementById('productGrid');
-  grid.innerHTML = "";
+  const grid=document.getElementById('productGrid');
+  grid.innerHTML="";
   rows.forEach(r=>{
     const c=parseCSVRow(r);
     if(!c[0]) return;
     const p = {
-      id:c[0],
-      name:c[1],
-      category:c[2],
-      price:parseFloat(c[3]),
-      stock:c[4],
-      thumbnail:c[5],
-      description:c[6],
-      images:c[7]
+      id:c[0], name:c[1], category:c[2], price:parseFloat(c[3]),
+      stock:c[4], thumbnail:c[5], description:c[6], images:c[7]
     };
-    productsMap[p.id] = p;
-
-    grid.innerHTML += `
+    productsMap[p.id]=p;
+    grid.innerHTML+=`
       <div class="bg-white p-4 rounded shadow flex flex-col">
         <img src="${p.thumbnail}" class="w-full h-40 object-cover rounded mb-2">
         <h2 class="font-bold text-lg">${p.name}</h2>
         <p class="text-green-700 font-bold mt-1">₹${p.price}</p>
-        <p class="text-sm text-gray-500 mt-1">${p.stock}</p>
+        <p class="text-sm text-gray-500 mt-1">Stock: ${p.stock}</p>
         <div class="mt-auto flex gap-2">
           <a href="product.html?id=${p.id}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex-1 text-center">View</a>
           <button onclick="addToCart('${p.id}')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded flex-1">Add</button>
@@ -89,14 +72,12 @@ fetch(CSV_URL)
   });
 });
 
-// Add to cart directly from index page
+// Add to cart
 function addToCart(id){
-  const p = productsMap[id];
-  if(!p) return showToast("Product not loaded yet!");
-  let cart = JSON.parse(localStorage.getItem('cart'))||{};
+  const cart = JSON.parse(localStorage.getItem('cart')) || {};
   cart[id] = (cart[id] || 0) + 1;
   localStorage.setItem('cart', JSON.stringify(cart));
-  showToast(`${p.name} added to cart!`);
+  showToast("Added to cart!");
 }
 </script>
 </body>
