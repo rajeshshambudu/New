@@ -2,164 +2,114 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Cart - Mini Amazon Store</title>
+<title>Cart</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-#toast {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  padding: 1rem 1.5rem;
-  background: #16a34a;
-  color: white;
-  border-radius: 0.5rem;
-  display: none;
-  z-index: 50;
-}
+#cartEmpty{text-align:center;margin-top:2rem;}
+#toast {position:fixed;bottom:1rem;right:1rem;padding:1rem 1.5rem;background:#16a34a;color:white;border-radius:.5rem;display:none;z-index:50;}
 </style>
 </head>
 <body class="bg-gray-100 p-4">
-
-<div class="max-w-4xl mx-auto p-4 bg-white rounded-xl shadow mt-4">
-  <h1 class="text-2xl font-bold mb-4">Your Cart</h1>
-  
-  <div id="cartItems" class="space-y-4"></div>
-  <div id="cartEmpty" class="text-center text-gray-500 mt-10 hidden">Your cart is empty.</div>
-
-  <div class="mt-6 flex justify-between items-center">
-    <div class="text-xl font-bold">Total: ₹<span id="cartTotal">0</span></div>
-    <button onclick="payUPI()" class="bg-green-600 px-6 py-3 rounded text-white font-bold">Pay via UPI</button>
-  </div>
+<div class="max-w-3xl mx-auto bg-white p-4 rounded shadow">
+<h1 class="text-2xl font-bold mb-4">Your Cart</h1>
+<div id="cartItems"></div>
+<p id="cartEmpty">Your cart is empty.</p>
+<hr class="my-4">
+<div class="flex justify-between font-bold text-xl mb-4">
+  <span>Total:</span> ₹<span id="cartTotal">0</span>
 </div>
-
+<button onclick="checkout()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded w-full">Pay via UPI</button>
+</div>
 <div id="toast"></div>
 
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1-7MmarfUBcDmvZw38wd9cE9ZJjr4qedZHBnK_8a2yhg/export?format=csv";
-let productsMap = {};
+const UPI_ID = "7093218658@ybl";
+let productsMap={};
 
-function showToast(msg){
-  const t = document.getElementById('toast');
-  t.innerText = msg; t.style.display='block';
-  setTimeout(()=>t.style.display='none',2000);
-}
+function showToast(msg){const t=document.getElementById('toast');t.innerText=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2000);}
 
-// Parse CSV row
-function parseCSVRow(row){
-  const result=[]; let current="", insideQuotes=false;
-  for(let i=0;i<row.length;i++){
-    const char=row[i];
-    if(char=='"' && row[i+1]=='"'){current+='"';i++;}
-    else if(char=='"'){insideQuotes=!insideQuotes;}
-    else if(char==',' && !insideQuotes){result.push(current); current="";}
-    else{current+=char;}
-  }
-  result.push(current);
-  return result;
-}
+function parseCSVRow(row){const result=[];let current="",insideQuotes=false;for(let i=0;i<row.length;i++){const char=row[i];if(char=='"'&&row[i+1]=='"'){current+='"';i++;}else if(char=='"'){insideQuotes=!insideQuotes;}else if(char==','&&!insideQuotes){result.push(current);current="";}else{current+=char;}}result.push(current);return result;}
 
-// Load products from Google Sheet
-fetch(CSV_URL)
-.then(r=>r.text())
-.then(data=>{
-  const rows=data.split("\n").slice(1);
-  rows.forEach(r=>{
-    const c=parseCSVRow(r);
-    if(c[0]) productsMap[c[0]] = {
-      id:c[0], name:c[1], category:c[2], price:parseFloat(c[3]),
-      stock:c[4], thumbnail:c[5], description:c[6], images:c[7]
-    };
+function loadProducts(){
+  fetch(CSV_URL).then(r=>r.text()).then(data=>{
+    const rows=data.split("\n").slice(1);
+    rows.forEach(r=>{
+      const c=parseCSVRow(r);
+      if(!c[0]) return;
+      const p = {
+        id:c[0], name:c[1], category:c[2], price:parseFloat(c[3]),
+        stock:c[4], thumbnail:c[5], description:c[6], images:c[7]
+      };
+      productsMap[p.id]=p;
+    });
+    renderCart();
   });
-  renderCart();
-});
+}
 
-// Render Cart
 function renderCart(){
-  let cart = JSON.parse(localStorage.getItem('cart')) || {};
-  const ids = Object.keys(cart);
-
-  if(ids.length === 0){
-    document.getElementById('cartItems').innerHTML = "";
-    document.getElementById('cartEmpty').classList.remove('hidden');
-    document.getElementById('cartTotal').innerText = "0";
-    return;
-  }
-
-  document.getElementById('cartEmpty').classList.add('hidden');
-
-  let total = 0;
-  let html = "";
-  ids.forEach(id => {
-    const qty = cart[id];
-    const p = productsMap[id];
-    if(!p) return; // skip invalid
-    const subtotal = (p.price * qty).toFixed(2);
-    total += parseFloat(subtotal);
-    html += `
-      <div class="flex justify-between items-center p-3 bg-gray-50 rounded shadow-sm">
+  const cart=JSON.parse(localStorage.getItem('cart'))||{};
+  const ids=Object.keys(cart);
+  if(ids.length===0){document.getElementById('cartItems').innerHTML="";document.getElementById('cartEmpty').style.display='block';document.getElementById('cartTotal').innerText='0';return;}
+  document.getElementById('cartEmpty').style.display='none';
+  let total=0, html="";
+  ids.forEach(id=>{
+    const qty=cart[id], product=productsMap[id];
+    if(!product) return;
+    const subtotal=(product.price*qty).toFixed(2);
+    total+=parseFloat(subtotal);
+    html+=`
+      <div class="flex justify-between items-center p-3 bg-gray-50 rounded shadow-sm mb-2">
         <div class="flex items-center gap-4">
-          <img src="${p.thumbnail}" class="w-16 h-16 object-cover rounded">
+          <img src="${product.thumbnail}" class="w-16 h-16 object-cover rounded">
           <div>
-            <div class="font-bold">${p.name}</div>
-            <div class="text-sm text-gray-500">₹${p.price} x ${qty} = ₹${subtotal}</div>
+            <div class="font-bold">${product.name}</div>
+            <div class="text-sm text-gray-500">₹${product.price} x ${qty} = ₹${subtotal}</div>
           </div>
         </div>
         <div class="flex gap-2">
-          <button onclick="decreaseItem('${id}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded">-</button>
-          <button onclick="increaseItem('${id}')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded">+</button>
+          <button onclick="decreaseItem('${id}')" class="bg-red-500 px-3 py-1 rounded text-white">-</button>
+          <button onclick="increaseItem('${id}')" class="bg-green-500 px-3 py-1 rounded text-white">+</button>
         </div>
       </div>
     `;
   });
-
-  document.getElementById('cartItems').innerHTML = html;
-  document.getElementById('cartTotal').innerText = total.toFixed(2);
+  document.getElementById('cartItems').innerHTML=html;
+  document.getElementById('cartTotal').innerText=total.toFixed(2);
 }
 
-// Remove / decrease quantity
-function decreaseItem(id){
-  let cart = JSON.parse(localStorage.getItem('cart')) || {};
-  if(cart[id]){
-    cart[id]--;
-    if(cart[id]<=0) delete cart[id];
-    localStorage.setItem('cart', JSON.stringify(cart));
-    renderCart();
-  }
-}
-
-// Increase quantity
 function increaseItem(id){
-  let cart = JSON.parse(localStorage.getItem('cart')) || {};
-  cart[id] = (cart[id] || 0) + 1;
-  localStorage.setItem('cart', JSON.stringify(cart));
+  const cart=JSON.parse(localStorage.getItem('cart'))||{};
+  cart[id]=(cart[id]||0)+1;
+  localStorage.setItem('cart',JSON.stringify(cart));
   renderCart();
 }
 
-// Pay via UPI
-function payUPI(){
-  let cart = JSON.parse(localStorage.getItem('cart')) || {};
-  const ids = Object.keys(cart);
-  if(ids.length===0) return showToast("Cart is empty");
-
-  let total = 0;
-  let msgText = "Payment for products:\n";
-
-  ids.forEach(id=>{
-    const p = productsMap[id];
-    if(!p) return;
-    const qty = cart[id];
-    const subtotal = (p.price * qty).toFixed(2);
-    total += parseFloat(subtotal);
-    msgText += `${p.name} x${qty} = ₹${subtotal}\n`;
-  });
-
-  msgText += `Total: ₹${total.toFixed(2)}`;
-  const msg = encodeURIComponent(msgText);
-
-  const upiLink = `upi://pay?pa=7093218658@ybl&pn=Rajesh Kumar&am=${total.toFixed(2)}&cu=INR&tn=${msg}`;
-  window.location.href = upiLink;
+function decreaseItem(id){
+  const cart=JSON.parse(localStorage.getItem('cart'))||{};
+  if(cart[id]){cart[id]--; if(cart[id]<=0) delete cart[id]; localStorage.setItem('cart',JSON.stringify(cart)); renderCart();}
 }
+
+function checkout(){
+  const cart=JSON.parse(localStorage.getItem('cart'))||{};
+  const ids=Object.keys(cart);
+  if(ids.length===0){showToast("Cart is empty!"); return;}
+  let msg="Payment for products:\n";
+  let total=0;
+  ids.forEach(id=>{
+    const qty=cart[id], product=productsMap[id];
+    if(!product) return;
+    const subtotal=(product.price*qty).toFixed(2);
+    total+=parseFloat(subtotal);
+    msg+=`${product.name} x${qty} = ₹${subtotal}\n`;
+  });
+  msg+=`Total: ₹${total.toFixed(2)}`;
+  const upiLink=`upi://pay?pa=${UPI_ID}&pn=Rajesh Kumar&am=${total.toFixed(2)}&cu=INR&tn=${encodeURIComponent(msg)}`;
+  window.location.href=upiLink;
+}
+
+loadProducts();
 </script>
 </body>
 </html>
