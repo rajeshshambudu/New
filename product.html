@@ -6,50 +6,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-#toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: #16a34a; color: white; border-radius: 0.5rem; display: none; z-index: 50; }
-#mainImg { cursor: zoom-in; }
+#carousel img{width:100%;height:300px;object-fit:cover;cursor:zoom-in;}
+#zoomed {display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);justify-content:center;align-items:center;z-index:50;}
+#zoomed img{max-width:90%;max-height:90%;cursor:zoom-out;}
+#toast {position:fixed;bottom:1rem;right:1rem;padding:1rem 1.5rem;background:#16a34a;color:white;border-radius:.5rem;display:none;z-index:60;}
 </style>
 </head>
 <body class="bg-gray-100 p-4">
 
-<div class="max-w-4xl mx-auto p-4 bg-white rounded-xl shadow mt-4" id="productContainer">
-  <div id="carousel" class="relative w-full h-72 overflow-hidden rounded">
-    <img id="mainImg" src="" class="w-full h-full object-cover transition-all duration-300">
-    <button id="prevBtn" class="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">‹</button>
-    <button id="nextBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">›</button>
-  </div>
-  <div id="thumbs" class="flex gap-2 overflow-x-auto mt-2"></div>
-
-  <div class="mt-4">
-    <h1 id="prodName" class="text-2xl font-bold"></h1>
-    <p id="prodDesc" class="text-gray-600 mt-1"></p>
-    <div class="text-3xl font-bold text-green-700 mt-3" id="prodPrice"></div>
-    <div class="mt-2 font-semibold" id="prodStock"></div>
-
-    <div class="mt-4 flex items-center gap-2">
-      <label for="quantity" class="font-bold">Qty:</label>
-      <input type="number" id="quantity" value="1" min="1" class="border rounded w-20 p-1 text-center">
-    </div>
-
-    <div class="mt-6 flex gap-3 sticky bottom-4 bg-white p-2">
-      <button onclick="addToCart()" class="bg-yellow-500 px-6 py-3 rounded text-white font-bold flex-1">Add to Cart</button>
-      <button onclick="payUPI()" class="bg-green-600 px-6 py-3 rounded text-white font-bold flex-1">Pay via UPI</button>
-    </div>
+<div class="max-w-3xl mx-auto bg-white p-4 rounded shadow">
+  <div id="carousel" class="mb-4"></div>
+  <h1 id="pname" class="text-2xl font-bold mb-2"></h1>
+  <p id="pdesc" class="text-gray-700 mb-2"></p>
+  <p class="text-green-700 font-bold text-xl mb-2">₹<span id="pprice"></span></p>
+  <p class="text-sm text-gray-500 mb-4">Stock: <span id="pstock"></span></p>
+  <div class="flex gap-2">
+    <button onclick="addToCart()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded flex-1">Add to Cart</button>
+    <button onclick="payNow()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded flex-1">Buy Now</button>
   </div>
 </div>
 
+<div id="zoomed" onclick="closeZoom()"><img id="zoomedImg"></div>
 <div id="toast"></div>
 
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/1-7MmarfUBcDmvZw38wd9cE9ZJjr4qedZHBnK_8a2yhg/export?format=csv";
-const id = new URLSearchParams(window.location.search).get("id");
-let images=[], currentIndex=0, prodData=null;
+const UPI_ID = "7093218658@ybl";
+let productsMap={}, product={};
 
-function showToast(msg){
-  const t = document.getElementById('toast');
-  t.innerText = msg; t.style.display='block';
-  setTimeout(()=>t.style.display='none',2000);
-}
+function showToast(msg){const t=document.getElementById('toast');t.innerText=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2000);}
 
 function parseCSVRow(row){
   const result=[]; let current="", insideQuotes=false;
@@ -60,102 +45,54 @@ function parseCSVRow(row){
     else if(char==',' && !insideQuotes){result.push(current); current="";}
     else{current+=char;}
   }
-  result.push(current);
-  return result;
+  result.push(current); return result;
 }
 
-fetch(CSV_URL)
-.then(r=>r.text())
-.then(data=>{
+const urlParams = new URLSearchParams(window.location.search);
+const pid = urlParams.get('id');
+
+fetch(CSV_URL).then(r=>r.text()).then(data=>{
   const rows=data.split("\n").slice(1);
-  const pRow = rows.map(r=>parseCSVRow(r)).find(r=>r[0]===id);
-  if(!pRow){
-    document.getElementById('productContainer').innerHTML="<p class='text-center text-red-500 text-lg'>Product not found!</p>";
-    return;
-  }
+  rows.forEach(r=>{
+    const c=parseCSVRow(r);
+    if(!c[0]) return;
+    const p = {
+      id:c[0], name:c[1], category:c[2], price:parseFloat(c[3]),
+      stock:c[4], thumbnail:c[5], description:c[6], images:c[7]
+    };
+    productsMap[p.id]=p;
+  });
 
-  prodData = {
-    id:pRow[0],
-    name:pRow[1],
-    category:pRow[2],
-    price:parseFloat(pRow[3]),
-    stock:pRow[4],
-    thumbnail:pRow[5],
-    description:pRow[6],
-    images:pRow[7]
-  };
+  product=productsMap[pid];
+  if(!product){alert("Product not found"); return;}
+  document.getElementById('pname').innerText=product.name;
+  document.getElementById('pdesc').innerText=product.description;
+  document.getElementById('pprice').innerText=product.price;
+  document.getElementById('pstock').innerText=product.stock;
 
-  document.getElementById('prodName').innerText = prodData.name;
-  document.getElementById('prodDesc').innerText = prodData.description;
-  document.getElementById('prodPrice').innerText = "₹"+prodData.price;
-  document.getElementById('prodStock').innerText = prodData.stock;
-  document.getElementById('prodStock').className = prodData.stock=='In Stock' ? "mt-2 font-semibold text-green-600" : "mt-2 font-semibold text-red-600";
-
-  images = prodData.images.replace(/"/g,"").split("|").map(i=>i.trim());
-  if(images.length===0) images = [prodData.thumbnail];
-  document.getElementById('mainImg').src = images[0];
-
-  const thumbs = document.getElementById('thumbs');
-  thumbs.innerHTML = images.map((img,i)=>`
-    <img src="${img}" class="h-16 w-16 object-cover border rounded cursor-pointer ${i===0?'border-blue-500':'border-gray-200'}" onclick="changeImg(${i})">
-  `).join("");
-
-  document.getElementById('prevBtn').addEventListener('click',()=>prevImg());
-  document.getElementById('nextBtn').addEventListener('click',()=>nextImg());
-
-  let startX=0;
-  document.getElementById('carousel').addEventListener('touchstart',e=>{startX=e.touches[0].clientX;});
-  document.getElementById('carousel').addEventListener('touchend',e=>{
-    const endX=e.changedTouches[0].clientX;
-    if(endX-startX>50) prevImg();
-    else if(startX-endX>50) nextImg();
+  const carousel=document.getElementById('carousel');
+  const imgs = product.images.split('|').filter(i=>i);
+  imgs.forEach((img)=>{
+    const im=document.createElement('img');
+    im.src=img; im.onclick=()=>zoomImage(img);
+    carousel.appendChild(im);
   });
 });
 
-function changeImg(i){
-  currentIndex=i;
-  document.getElementById('mainImg').src = images[i];
-  document.querySelectorAll('#thumbs img').forEach((img,j)=>{
-    img.classList.remove('border-blue-500'); img.classList.add('border-gray-200');
-    if(i===j) img.classList.add('border-blue-500');
-  });
-}
-function prevImg(){currentIndex=(currentIndex-1+images.length)%images.length; changeImg(currentIndex);}
-function nextImg(){currentIndex=(currentIndex+1)%images.length; changeImg(currentIndex);}
+function zoomImage(src){const z=document.getElementById('zoomed');document.getElementById('zoomedImg').src=src;z.style.display='flex';}
+function closeZoom(){document.getElementById('zoomed').style.display='none';}
 
 function addToCart(){
-  if(!prodData) return showToast("Product not loaded yet!");
-  let cart = JSON.parse(localStorage.getItem('cart'))||[];
-  const qty=parseInt(document.getElementById('quantity').value)||1;
-  for(let i=0;i<qty;i++) cart.push(prodData.id);
-  localStorage.setItem('cart', JSON.stringify(cart));
-  showToast(`${prodData.name} added to cart!`);
+  let cart=JSON.parse(localStorage.getItem('cart'))||{};
+  cart[product.id]=(cart[product.id]||0)+1;
+  localStorage.setItem('cart',JSON.stringify(cart));
+  showToast("Added to cart!");
 }
 
-function payUPI(){
-  let cart = JSON.parse(localStorage.getItem('cart')) || [];
-  if(cart.length === 0) return showToast("Cart is empty");
-
-  const qtyMap = {};
-  cart.forEach(id => qtyMap[id] = (qtyMap[id] || 0) + 1);
-
-  let total = 0;
-  let msgText = "Payment for products:\n";
-
-  Object.keys(qtyMap).forEach(id => {
-    const p = prodData.id===id ? prodData : null;
-    if(!p && window.productsMap) p=window.productsMap[id];
-    if(!p) return;
-    const qty = qtyMap[id];
-    const subtotal = (p.price * qty).toFixed(2);
-    total += parseFloat(subtotal);
-    msgText += `${p.name} x${qty} = ₹${subtotal}\n`;
-  });
-
-  msgText += `Total: ₹${total.toFixed(2)}`;
-  const msg = encodeURIComponent(msgText);
-  const upiLink = `upi://pay?pa=7093218658@ybl&pn=Rajesh Kumar&am=${total.toFixed(2)}&cu=INR&tn=${msg}`;
-  window.location.href = upiLink;
+function payNow(){
+  let msg=`Payment for product:\n${product.name} x1 = ₹${product.price}\nTotal: ₹${product.price}`;
+  const upiLink=`upi://pay?pa=${UPI_ID}&pn=Rajesh Kumar&am=${product.price}&cu=INR&tn=${encodeURIComponent(msg)}`;
+  window.location.href=upiLink;
 }
 </script>
 </body>
