@@ -40,7 +40,8 @@ function loadProducts(){
       if(!c[0]) return;
       const p = {
         id:c[0], name:c[1], category:c[2], price:parseFloat(c[3]),
-        stock:c[4], thumbnail:c[5], description:c[6], images:c[7]
+        oldPrice:c[4]?parseFloat(c[4]):null,
+        stock:c[5], thumbnail:c[6], description:c[7], images:c[8]
       };
       productsMap[p.id]=p;
     });
