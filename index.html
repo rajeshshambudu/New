@@ -6,14 +6,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-#toast {position:fixed;bottom:1rem;right:1rem;padding:1rem 1.5rem;background:#16a34a;color:white;border-radius:.5rem;display:none;z-index:50;}
+#toast {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  padding: 1rem 1.5rem;
+  background: #16a34a;
+  color: white;
+  border-radius: 0.5rem;
+  display: none;
+  z-index: 50;
+}
 </style>
 </head>
 <body class="bg-gray-100 p-4">
 
 <div class="max-w-7xl mx-auto">
-<h1 class="text-3xl font-bold mb-6">Products</h1>
-<div id="productGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
+  <h1 class="text-3xl font-bold mb-6">Products</h1>
+  <div id="productGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
 </div>
 
 <div id="toast"></div>
@@ -54,16 +64,21 @@ fetch(CSV_URL).then(r=>r.text()).then(data=>{
     if(!c[0]) return;
     const p = {
       id:c[0], name:c[1], category:c[2], price:parseFloat(c[3]),
-      stock:c[4], thumbnail:c[5], description:c[6], images:c[7]
+      oldPrice:c[4] ? parseFloat(c[4]) : null,
+      stock:c[5], thumbnail:c[6], description:c[7], images:c[8]
     };
     productsMap[p.id]=p;
     grid.innerHTML+=`
       <div class="bg-white p-4 rounded shadow flex flex-col">
         <img src="${p.thumbnail}" class="w-full h-40 object-cover rounded mb-2">
         <h2 class="font-bold text-lg">${p.name}</h2>
-        <p class="text-green-700 font-bold mt-1">₹${p.price}</p>
+        <div class="mt-1">
+          <span class="text-green-700 font-bold text-lg">₹${p.price}</span>
+          ${p.oldPrice ? `<span class="text-gray-400 line-through text-sm ml-2">₹${p.oldPrice}</span>` : ''}
+        </div>
         <p class="text-sm text-gray-500 mt-1">Stock: ${p.stock}</p>
-        <div class="mt-auto flex gap-2">
+        <div class="mt-auto flex gap-2 items-center">
+          <input type="number" id="qty-${p.id}" value="1" min="1" class="w-16 p-1 border rounded">
           <a href="product.html?id=${p.id}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex-1 text-center">View</a>
           <button onclick="addToCart('${p.id}')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded flex-1">Add</button>
         </div>
@@ -74,10 +89,12 @@ fetch(CSV_URL).then(r=>r.text()).then(data=>{
 
 // Add to cart
 function addToCart(id){
+  const qtyInput = document.getElementById(`qty-${id}`);
+  const qty = parseInt(qtyInput.value) || 1;
   const cart = JSON.parse(localStorage.getItem('cart')) || {};
-  cart[id] = (cart[id] || 0) + 1;
+  cart[id] = (cart[id] || 0) + qty;
   localStorage.setItem('cart', JSON.stringify(cart));
-  showToast("Added to cart!");
+  showToast(`Added ${qty} to cart!`);
 }
 </script>
 </body>
